@@ -1,0 +1,42 @@
+name: "actnode Node 24 runtime audit"
+description: "Find workflow steps whose actions still run on Node 20 or older, and the release that moves each one to Node 24."
+author: "Blackman99"
+branding:
+  icon: "arrow-up-right"
+  color: "green"
+inputs:
+  path:
+    description: "Repository root to scan"
+    default: "."
+  target:
+    description: "Minimum Node.js major an action must run on"
+    default: "24"
+  fail:
+    description: "Fail the step when an old-runtime action is found (true/false)"
+    default: "true"
+  token:
+    description: "Token used to list tags of the actions you use"
+    default: ${{ github.token }}
+outputs:
+  report:
+    description: "Path to the JSON report"
+    value: ${{ steps.scan.outputs.report }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: python3 -m pip install --quiet --disable-pip-version-check "${{ github.action_path }}"
+    - id: scan
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        IN_PATH: ${{ inputs.path }}
+        IN_TARGET: ${{ inputs.target }}
+        IN_FAIL: ${{ inputs.fail }}
+      run: |
+        out="$RUNNER_TEMP/actnode.json"
+        python3 -m actnode scan "$IN_PATH" --target "$IN_TARGET" --format json -o "$out"
+        echo "report=$out" >> "$GITHUB_OUTPUT"
+        fail=()
+        [ "$IN_FAIL" = "true" ] && fail=(--fail)
+        python3 -m actnode scan "$IN_PATH" --target "$IN_TARGET" --format md -o "$GITHUB_STEP_SUMMARY" "${fail[@]}"

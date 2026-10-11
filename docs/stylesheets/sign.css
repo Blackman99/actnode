@@ -1,0 +1,17 @@
+/* actnode docs: highway guide-sign language (green / reflective white / exit-only yellow / asphalt), Overpass. */
+@font-face{font-family:"Overpass";src:url(../../fonts/overpass.woff2) format("woff2");font-weight:400 900;font-display:swap}
+@font-face{font-family:"Overpass Mono";src:url(../../fonts/overpass-mono.woff2) format("woff2");font-weight:500;font-display:swap}
+:root,[data-md-color-scheme="default"]{
+  --md-primary-fg-color:#116b46;--md-primary-fg-color--light:#116b46;--md-primary-fg-color--dark:#116b46;
+  --md-primary-bg-color:#f5f8f0;--md-accent-fg-color:#116b46;--md-typeset-a-color:#116b46;
+  --md-default-bg-color:#f5f8f0;--md-default-fg-color:#1a1a17;
+  --md-code-bg-color:#2b2d2a;--md-code-fg-color:#f5f8f0;
+  --md-code-hl-string-color:#f2b705;--md-code-hl-keyword-color:#9fd8bd;--md-code-hl-comment-color:#8b928c;--md-code-hl-name-color:#f5f8f0;
+  --md-text-font:"Overpass";--md-code-font:"Overpass Mono";
+}
+.md-header{box-shadow:inset 0 -6px 0 #f2b705}
+.md-typeset h1,.md-typeset h2{font-weight:900;color:#116b46}
+.md-typeset h1{display:inline-block;background:#116b46;color:#f5f8f0;padding:.15em .5em;border-radius:8px;box-shadow:inset 0 0 0 4px #116b46,inset 0 0 0 7px #f5f8f0}
+.md-typeset table:not([class]) th{background:#116b46;color:#f5f8f0}
+.md-typeset :not(pre)>code{background:#e3eadf;color:#1a1a17}
+.md-footer,.md-footer-meta{background:#2b2d2a}

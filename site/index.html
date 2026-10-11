@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>actnode — Node 20 lane ends. Move your GitHub Actions to Node 24.</title>
+<meta name="description" content="actnode finds every GitHub Actions step whose action still runs on Node 20 or older, tells you the release that moves it to Node 24, and can rewrite the uses: line for you.">
+<link rel="canonical" href="https://blackman99.github.io/actnode/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="logo-512.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="logo-512.png">
+<meta name="theme-color" content="#116b46">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="actnode">
+<meta property="og:url" content="https://blackman99.github.io/actnode/">
+<meta property="og:title" content="actnode — Node 20 lane ends. Move your GitHub Actions to Node 24.">
+<meta property="og:description" content="Find every workflow step still on a Node 20 action, get the release that runs on Node 24, rewrite it in one command.">
+<meta property="og:image" content="https://blackman99.github.io/actnode/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A green highway guide sign: NODE 24 straight ahead, a yellow EXIT ONLY panel for Node 20 lane ends.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="actnode — Node 20 lane ends. Move your GitHub Actions to Node 24.">
+<meta name="twitter:description" content="Find every workflow step still on a Node 20 action, get the release that runs on Node 24, rewrite it in one command.">
+<meta name="twitter:image" content="https://blackman99.github.io/actnode/og-image.png">
+<link rel="preload" href="fonts/overpass.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="gantry" aria-labelledby="h1">
+  <div class="truss" aria-hidden="true"></div>
+  <div class="sign guide">
+    <i class="bolt b1"></i><i class="bolt b2"></i><i class="bolt b3"></i><i class="bolt b4"></i>
+    <div class="legend">
+      <img class="shield" src="logo.svg" alt="" width="120" height="120">
+      <div>
+        <p class="kicker">actnode</p>
+        <h1 id="h1"><span class="dest">Node 24</span> <span class="thru">all lanes</span></h1>
+        <p class="sub">Your GitHub Actions still on Node 20 are in a lane that ends. actnode finds each one, names the release that runs on Node 24, and moves you over.</p>
+      </div>
+    </div>
+    <div class="exitonly" aria-label="Node 20: exit only, lane ends">
+      <span>NODE 20</span><b>EXIT ONLY</b><span>LANE ENDS</span>
+    </div>
+  </div>
+  <div class="road hero-road" aria-hidden="true">
+    <div class="lanes">
+      <div class="lane l20"><svg viewBox="0 0 40 80"><path d="M24 76V44Q24 24 10 12M4 24L9 10L22 12"/></svg></div>
+      <div class="lane"><svg viewBox="0 0 40 80"><path d="M20 76V8M8 22L20 6l12 16"/></svg></div>
+      <div class="lane"><svg viewBox="0 0 40 80"><path d="M20 76V8M8 22L20 6l12 16"/></svg></div>
+    </div>
+  </div>
+  <div class="vms" role="img" aria-label="Variable message sign showing example upgrades found by actnode">
+    <div class="vms-face"><span class="vms-from">actions/checkout@v4</span><span class="vms-to">→ @v5 · node24</span></div>
+  </div>
+</header>
+
+<main class="highway">
+  <div class="centerline" aria-hidden="true"></div>
+
+  <section class="roadside left" id="install">
+    <div class="sign green"><i class="bolt b1"></i><i class="bolt b2"></i>
+      <p class="exitno">EXIT 1</p>
+      <h2>Install</h2>
+      <pre><code>pipx install git+https://github.com/Blackman99/actnode</code></pre>
+      <p>Python 3.9+, zero dependencies. Or skip installing and use the GitHub Action below.</p>
+    </div><div class="post"></div>
+  </section>
+
+  <section class="roadside right" id="scan">
+    <div class="sign green"><i class="bolt b1"></i><i class="bolt b2"></i>
+      <p class="exitno">EXIT 2</p>
+      <h2>Scan the repo</h2>
+      <pre><code>$ actnode
+[OLD] .github/workflows/ci.yml:7   node20  actions/checkout@v4       -> actions/checkout@v5
+[OLD] .github/workflows/ci.yml:9   node20  actions/cache@v4          -> actions/cache@v5
+[OLD] .github/workflows/ci.yml:11  node20  some-org/deploy@v2        no release on node24 yet
+
+3 step(s) run an action older than node24; 2 have a newer release ready.</code></pre>
+      <p>It reads every <code>uses:</code> in your workflows and local actions, fetches each action's <code>action.yml</code> at that exact ref, follows composite actions inside, and picks the <em>smallest</em> major jump that runs on Node 24. SHA pins get a SHA back.</p>
+    </div><div class="post"></div>
+  </section>
+
+  <section class="roadside left" id="fix">
+    <div class="sign green"><i class="bolt b1"></i><i class="bolt b2"></i>
+      <p class="exitno">EXIT 3</p>
+      <h2>Change lanes</h2>
+      <pre><code>$ actnode --fix
+-      - uses: actions/checkout@11bd719… # v4.2.2
++      - uses: actions/checkout@fbc6f39… # v5.1.0
+-      - uses: actions/setup-node@v4.1.0
++      - uses: actions/setup-node@v5.0.0</code></pre>
+      <p>Only the lines with a known fix are rewritten; quotes, comments and indentation stay. Review the majors' changelogs, then commit.</p>
+    </div><div class="post"></div>
+  </section>
+
+  <section class="roadside right" id="ci">
+    <div class="sign green"><i class="bolt b1"></i><i class="bolt b2"></i>
+      <p class="exitno">EXIT 4</p>
+      <h2>Keep it in CI</h2>
+      <pre><code>- uses: actions/checkout@v7
+- uses: Blackman99/actnode@v0.1.0
+  with:
+    fail: true   # red build if an old-runtime action sneaks back</code></pre>
+      <p>Writes a table to the job summary. The <code>FORCE_JAVASCRIPT_ACTIONS_TO_NODE24</code> switch only hides the problem for now; actnode tells you what to bump before Node 20 is removed from runners.</p>
+    </div><div class="post"></div>
+  </section>
+
+  <section class="distance" aria-label="More">
+    <div class="sign green wide"><i class="bolt b1"></i><i class="bolt b2"></i><i class="bolt b3"></i><i class="bolt b4"></i>
+      <ul>
+        <li><a href="docs/">Docs</a><span>install · usage · reference · FAQ</span></li>
+        <li><a href="https://github.com/Blackman99/actnode">GitHub</a><span>source · issues · MIT</span></li>
+        <li><a href="docs/blog/">Blog</a><span>why the warning won't go away</span></li>
+      </ul>
+    </div><div class="post twin"></div>
+  </section>
+</main>
+<footer><p>actnode · MIT · sign face after MUTCD guide signs, set in Overpass</p></footer>
+<script src="app.js" defer></script>
+</body>
+</html>

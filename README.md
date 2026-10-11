@@ -1,0 +1,41 @@
+<p align="center"><img src="site/logo-512.png" width="120" alt="actnode logo: a green route shield reading ACT 24"></p>
+<h1 align="center">actnode</h1>
+<p align="center"><b>Node 20 lane ends.</b> Find every GitHub Actions step still on a Node 20 (or older) action, get the release that runs on Node 24, and rewrite it.</p>
+<p align="center"><a href="https://blackman99.github.io/actnode/">Home</a> · <a href="https://blackman99.github.io/actnode/docs/">Docs</a> · <a href="https://github.com/Blackman99/actnode/actions/workflows/ci.yml"><img src="https://github.com/Blackman99/actnode/actions/workflows/ci.yml/badge.svg" alt="CI"></a></p>
+
+## The problem
+
+Since 2026-06-02 GitHub runners run JavaScript actions on Node 24, and jobs that use node20 actions end with *"Node.js 20 actions are deprecated. The following actions are running on Node.js 20…"*. The warning doesn't say **which file and line**, misses actions **hidden inside composite actions**, and doesn't say **which version fixes it**. `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` only hides it ([actions/runner#4295](https://github.com/actions/runner/issues/4295)) until Node 20 is removed from runners.
+
+## Install
+
+```bash
+pipx install git+https://github.com/Blackman99/actnode
+```
+
+Python 3.9+, zero dependencies. Set `GITHUB_TOKEN` (e.g. `export GITHUB_TOKEN=$(gh auth token)`) for repos with many actions.
+
+## Use
+
+```console
+$ actnode
+[OLD] .github/workflows/ci.yml:7    node20  actions/checkout@v4         -> actions/checkout@v5
+[OLD] .github/workflows/ci.yml:10   node20  actions/upload-artifact@v4  -> actions/upload-artifact@v6
+$ actnode --fix      # rewrite those uses: lines (SHA pins get a SHA + version comment)
+$ actnode --fail     # exit 1 if anything is still old
+```
+
+![demo](site/demo.gif)
+
+It reads each action's real `action.yml` at the exact ref you pin, follows composite actions, and suggests the **smallest** major bump that runs on Node 24.
+
+### In CI
+
+```yaml
+- uses: actions/checkout@v7
+- uses: Blackman99/actnode@v0.1.0   # job summary table; fails if an old-runtime action sneaks back
+```
+
+Full docs: [install](https://blackman99.github.io/actnode/docs/install/) · [usage](https://blackman99.github.io/actnode/docs/usage/) · [Action](https://blackman99.github.io/actnode/docs/action/) · [reference](https://blackman99.github.io/actnode/docs/reference/) · [FAQ](https://blackman99.github.io/actnode/docs/faq/)
+
+[Goal](GOAL.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · MIT

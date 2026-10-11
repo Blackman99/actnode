@@ -1,0 +1,33 @@
+site_name: actnode docs
+site_description: Find GitHub Actions steps still running on Node 20 (or older), get the release that moves each one to Node 24, and rewrite the uses lines.
+site_url: https://blackman99.github.io/actnode/docs/
+repo_url: https://github.com/Blackman99/actnode
+repo_name: Blackman99/actnode
+edit_uri: edit/main/docs/
+copyright: MIT © 2026 Blackman99
+theme:
+  name: material
+  custom_dir: overrides
+  favicon: assets/logo.svg
+  logo: assets/logo.svg
+  font: false
+  palette:
+    scheme: default
+    primary: custom
+    accent: custom
+  features: [navigation.instant, navigation.top, content.code.copy, search.highlight, toc.follow]
+extra_css: [stylesheets/sign.css]
+nav:
+  - Overview: index.md
+  - Install: install.md
+  - Usage: usage.md
+  - GitHub Action: action.md
+  - Configuration: config.md
+  - Command reference: reference.md
+  - FAQ: faq.md
+  - Blog:
+    - All posts: blog/index.md
+    - "The Node 20 warning that won't go away": blog/node20-warning.md
+    - "那条去不掉的 Node 20 警告": blog/node20-warning-zh.md
+  - Home page ↗: https://blackman99.github.io/actnode/
+markdown_extensions: [admonition, attr_list, tables, {toc: {permalink: true}}, pymdownx.highlight, pymdownx.superfences]
