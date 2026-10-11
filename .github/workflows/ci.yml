@@ -10,6 +10,7 @@ permissions:
   contents: read
 
 env:
+  GITHUB_TOKEN: ${{ github.token }}
   PYTHONUTF8: "1"
   PYTHONIOENCODING: utf-8
 
