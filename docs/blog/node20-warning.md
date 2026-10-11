@@ -35,4 +35,6 @@ Then keep it from coming back with the Action:
 - uses: Blackman99/actnode@v0.1.0
 ```
 
+**Next:** [Migrating off Node 20 actions: a worked example](migrate-off-node20.md) walks through a full migration, including the nested cases `--fix` can't rewrite for you.
+
 Source and issues: [github.com/Blackman99/actnode](https://github.com/Blackman99/actnode).

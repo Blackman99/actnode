@@ -35,4 +35,6 @@ actnode: rewrote 1 line(s)
 - uses: Blackman99/actnode@v0.1.0
 ```
 
+**下一篇：**[迁移出 Node 20 action：一次完整实操](migrate-off-node20-zh.md)，完整走一遍迁移，包括 `--fix` 无法替你改写的嵌套情况。
+
 源码与反馈：[github.com/Blackman99/actnode](https://github.com/Blackman99/actnode)。

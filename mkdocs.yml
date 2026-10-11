@@ -29,5 +29,7 @@ nav:
     - All posts: blog/index.md
     - "The Node 20 warning that won't go away": blog/node20-warning.md
     - "那条去不掉的 Node 20 警告": blog/node20-warning-zh.md
+    - "Migrating off Node 20 actions: a worked example": blog/migrate-off-node20.md
+    - "迁移出 Node 20 action：一次完整实操": blog/migrate-off-node20-zh.md
   - Home page ↗: https://blackman99.github.io/actnode/
 markdown_extensions: [admonition, attr_list, tables, {toc: {permalink: true}}, pymdownx.highlight, pymdownx.superfences]
