@@ -77,7 +77,7 @@
 [OLD] .github/workflows/ci.yml:11  node20  some-org/deploy@v2        no release on node24 yet
 
 3 step(s) run an action older than node24; 2 have a newer release ready.</code></pre>
-      <p>It reads every <code>uses:</code> in your workflows and local actions, fetches each action's <code>action.yml</code> at that exact ref, follows composite actions inside, and picks the <em>smallest</em> major jump that runs on Node 24. SHA pins get a SHA back.</p>
+      <p>It reads every <code>uses:</code> in your workflows and local actions, fetches each action's <code>action.yml</code> at that exact ref, follows composite actions and reusable workflows inside, and picks the <em>smallest</em> major jump that runs on Node 24. SHA pins get a SHA back. Or scan remote with <code>actnode --repo owner/name</code> — no clone.</p>
     </div><div class="post"></div>
   </section>
 

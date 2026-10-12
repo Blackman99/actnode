@@ -16,4 +16,10 @@ actnode reports it as `OLD` with "no release on node24 yet". Look for an open is
 Actions in private repos need a token that can read them (`GITHUB_TOKEN`). Local `./` actions are read from disk.
 
 **Reusable workflows (`uses: org/repo/.github/workflows/x.yml@v1`)?**
-Reported as `?` in v0.1. Recursive scanning of reusable workflows is on the [roadmap](https://github.com/Blackman99/actnode/blob/main/ROADMAP.md).
+Supported since v0.2. actnode fetches the workflow YAML, reports status `workflow` (`wfl`), and recursively scans nested `uses:` (same depth limit as composites). Local `./.github/workflows/…` calls are read from disk. `--fix` does not rewrite uses found only inside a reusable workflow.
+
+**Can I scan without cloning?**
+Yes: `actnode --repo owner/name` or `actnode --org owner`. Org mode scans public non-fork repos by default. Findings are labeled `owner/repo:path`. `--fix` needs a local checkout.
+
+**Where are tags cached?**
+Under `~/.cache/actnode` (or `$XDG_CACHE_HOME/actnode`), 24h TTL. Use `--no-cache` to bypass.

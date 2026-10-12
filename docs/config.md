@@ -6,7 +6,9 @@ actnode has no config file. Everything is a flag or an environment variable.
 |---|---|---|
 | Minimum Node major | `--target 24` | 24 |
 | GitHub token | `GITHUB_TOKEN` or `GH_TOKEN` env | none (60 API requests/hour) |
-| Composite depth | fixed at 3 levels | 3 |
+| Composite / reusable-workflow depth | fixed at 3 levels | 3 |
+| Tag cache directory | `$XDG_CACHE_HOME/actnode` or `~/.cache/actnode` | 24h TTL |
+| Skip tag cache | `--no-cache` | off |
 
 ## Choosing the target
 

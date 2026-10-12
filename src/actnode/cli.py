@@ -6,9 +6,18 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .core import CURRENT, Resolver, apply_fixes, scan
+from .core import CURRENT, Resolver, apply_fixes, scan, scan_org, scan_repo
 
-MARK = {"ok": "ok ", "old": "OLD", "no-fix": "OLD", "unknown": " ? ", "composite": "cmp", "docker": "dkr", "local": "loc"}
+MARK = {
+    "ok": "ok ",
+    "old": "OLD",
+    "no-fix": "OLD",
+    "unknown": " ? ",
+    "composite": "cmp",
+    "workflow": "wfl",
+    "docker": "dkr",
+    "local": "loc",
+}
 
 
 def render_text(findings, target):
@@ -25,7 +34,7 @@ def render_text(findings, target):
     if old:
         rows.append(f"{len(old)} step(s) run an action older than node{target}; {len(fix)} have a newer release ready.")
     else:
-        rows.append(f"All actions run on node{target} or newer (or are composite/docker).")
+        rows.append(f"All actions run on node{target} or newer (or are composite/workflow/docker).")
     return "\n".join(rows)
 
 
@@ -57,18 +66,30 @@ jobs:
 """
 
 
-def main(argv=None):
-    p = argparse.ArgumentParser(prog="actnode", description="Find GitHub Actions that still run on Node 20 (or older) and the release that moves them to Node 24.")
-    p.add_argument("--version", action="version", version=f"actnode {__version__}")
-    sub = p.add_subparsers(dest="cmd")
-    s = sub.add_parser("scan", help="scan a repository's workflows (default command)")
-    s.add_argument("path", nargs="?", default=".")
+def _add_scan_flags(s):
+    s.add_argument("path", nargs="?", default=None, help="local repository root (default .)")
+    s.add_argument("--repo", metavar="OWNER/NAME", help="scan a remote repo via GitHub API (no clone)")
+    s.add_argument("--org", metavar="OWNER", help="scan all public non-fork repos for an org/user via API")
     s.add_argument("--target", type=int, default=CURRENT, help="minimum Node major (default 24)")
     s.add_argument("--format", choices=["text", "json", "md"], default="text")
     s.add_argument("-o", "--output", help="write report to this file (appends for md)")
     s.add_argument("--fix", action="store_true", help="rewrite uses: lines to the suggested refs")
     s.add_argument("--fail", action="store_true", help="exit 1 if any step runs an old Node action")
     s.add_argument("--all", action="store_true", help="show every step, not only problems")
+    s.add_argument("--no-cache", action="store_true", help="skip disk tag cache (~/.cache/actnode)")
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(
+        prog="actnode",
+        description="Find GitHub Actions that still run on Node 20 (or older) and the release that moves them to Node 24.",
+    )
+    p.add_argument("--version", action="version", version=f"actnode {__version__}")
+    sub = p.add_subparsers(dest="cmd")
+    s = sub.add_parser("scan", help="scan a repository's workflows (default command)")
+    _add_scan_flags(s)
+    # Also accept top-level flags when no subcommand (actnode --repo ... / actnode .)
+    # The default-insert of "scan" below handles that.
     sub.add_parser("demo", help="scan a built-in sample workflow (needs network)")
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] not in ("scan", "demo", "-h", "--help", "--version"):
@@ -80,13 +101,37 @@ def main(argv=None):
         (d / ".github" / "workflows").mkdir(parents=True)
         (d / ".github" / "workflows" / "ci.yml").write_text(DEMO)
         a = p.parse_args(["scan", str(d), "--all"])
-    root = Path(a.path)
+
+    if a.repo and a.org:
+        print("actnode: use only one of --repo or --org", file=sys.stderr)
+        return 2
+    if (a.repo or a.org) and a.path is not None:
+        print("actnode: PATH cannot be combined with --repo or --org", file=sys.stderr)
+        return 2
+    if a.fix and (a.repo or a.org):
+        print("actnode: --fix requires a local checkout; cannot rewrite remote scans", file=sys.stderr)
+        return 2
+
+    resolver = Resolver(use_cache=not a.no_cache)
     try:
-        findings = scan(root, Resolver(), a.target)
+        if a.repo:
+            if "/" not in a.repo or a.repo.count("/") != 1:
+                print("actnode: --repo expects OWNER/NAME", file=sys.stderr)
+                return 2
+            owner, name = a.repo.split("/", 1)
+            findings = scan_repo(owner, name, resolver, a.target)
+        elif a.org:
+            findings = scan_org(a.org, resolver, a.target)
+        else:
+            root = Path(a.path if a.path is not None else ".")
+            findings = scan(root, resolver, a.target)
     except RuntimeError as e:
         print(f"actnode: {e}", file=sys.stderr)
         return 2
-    shown = findings if (a.all or a.format == "json") else [f for f in findings if f.status in ("old", "no-fix", "unknown")]
+
+    shown = findings if (a.all or a.format == "json") else [
+        f for f in findings if f.status in ("old", "no-fix", "unknown")
+    ]
     if a.format == "json":
         text = json.dumps({"target": a.target, "findings": [f.to_dict() for f in findings]}, indent=2) + "\n"
     elif a.format == "md":
@@ -99,6 +144,7 @@ def main(argv=None):
     else:
         sys.stdout.write(text)
     if a.fix:
+        root = Path(a.path if a.path is not None else ".")
         n = apply_fixes(root, findings)
         print(f"actnode: rewrote {n} line(s)", file=sys.stderr)
     if a.fail and any(f.status in ("old", "no-fix") for f in findings):

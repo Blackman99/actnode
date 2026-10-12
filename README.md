@@ -23,17 +23,18 @@ $ actnode
 [OLD] .github/workflows/ci.yml:10   node20  actions/upload-artifact@v4  -> actions/upload-artifact@v6
 $ actnode --fix      # rewrite those uses: lines (SHA pins get a SHA + version comment)
 $ actnode --fail     # exit 1 if anything is still old
+$ actnode --repo owner/name   # API scan, no clone
 ```
 
 ![demo](site/demo.gif)
 
-It reads each action's real `action.yml` at the exact ref you pin, follows composite actions, and suggests the **smallest** major bump that runs on Node 24.
+It reads each action's real `action.yml` at the exact ref you pin, follows composite actions and reusable workflows, and suggests the **smallest** major bump that runs on Node 24. Scan a remote repo without cloning: `actnode --repo owner/name` (or `--org owner`).
 
 ### In CI
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: Blackman99/actnode@v0.1.0   # job summary table; fails if an old-runtime action sneaks back
+- uses: Blackman99/actnode@v0.2.0   # job summary table; fails if an old-runtime action sneaks back
 ```
 
 Full docs: [install](https://blackman99.github.io/actnode/docs/install/) · [usage](https://blackman99.github.io/actnode/docs/usage/) · [Action](https://blackman99.github.io/actnode/docs/action/) · [reference](https://blackman99.github.io/actnode/docs/reference/) · [FAQ](https://blackman99.github.io/actnode/docs/faq/)

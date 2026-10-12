@@ -6,7 +6,7 @@
 - Smallest-major suggestion in the same ref style (tag / full version / SHA + comment)
 - `--fix`, `--fail`, text / JSON / Markdown, GitHub Action with job summary
 
-## v0.2 — reach
+## v0.2 (2026-10-12) — shipped
 - Reusable workflows (`uses: org/repo/.github/workflows/x.yml@ref`) scanned recursively
 - Org/repo mode: `actnode --repo owner/name` and `--org owner` without cloning (API only)
 - Cache tag lookups across runs (`~/.cache/actnode`)

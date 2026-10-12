@@ -1,22 +1,39 @@
 # Command reference
 
 ```
-actnode [scan] [PATH] [--target N] [--format text|json|md] [-o FILE] [--fix] [--fail] [--all]
+actnode [scan] [PATH] [--repo OWNER/NAME] [--org OWNER]
+        [--target N] [--format text|json|md] [-o FILE]
+        [--fix] [--fail] [--all] [--no-cache]
 actnode demo
 actnode --version
 ```
 
 | Flag | Meaning |
 |---|---|
-| `PATH` | repository root (default `.`) |
+| `PATH` | local repository root (default `.`; mutually exclusive with `--repo`/`--org`) |
+| `--repo OWNER/NAME` | scan a remote repo via the GitHub Contents API (no clone) |
+| `--org OWNER` | scan all public non-fork repos for an org or user via the API |
 | `--target N` | minimum Node major an action must run on (default 24) |
 | `--format` | `text` (default), `json` (every finding), `md` (problem table, for job summaries) |
 | `-o FILE` | write to a file; `md` appends (so it works with `$GITHUB_STEP_SUMMARY`) |
-| `--fix` | rewrite direct `uses:` lines to the suggested ref |
+| `--fix` | rewrite direct `uses:` lines to the suggested ref (local PATH only) |
 | `--fail` | exit code 1 if any step uses an older runtime |
-| `--all` | in text mode, also show `ok`, composite and docker steps |
+| `--all` | in text mode, also show `ok`, composite, workflow and docker steps |
+| `--no-cache` | skip the on-disk tag cache (`~/.cache/actnode` / `$XDG_CACHE_HOME/actnode`) |
 
-Exit codes: `0` ok, `1` old runtime found with `--fail`, `2` GitHub API rate limit (set a token).
+Exit codes: `0` ok, `1` old runtime found with `--fail`, `2` usage error or GitHub API rate limit (set a token).
+
+## Status values
+
+| `status` | Text mark | Meaning |
+|---|---|---|
+| `ok` | `ok` | runs on target Node or newer |
+| `old` | `OLD` | older Node; a suggested bump exists |
+| `no-fix` | `OLD` | older Node; no node24 release yet |
+| `composite` | `cmp` | composite action (nested steps followed) |
+| `workflow` | `wfl` | reusable workflow (nested uses followed) |
+| `docker` | `dkr` | Docker action |
+| `unknown` | `?` | could not resolve |
 
 ## JSON shape
 
@@ -26,3 +43,5 @@ Exit codes: `0` ok, `1` old runtime found with `--fail`, `2` GitHub API rate lim
    "runtime": "node20", "status": "old", "suggest": "actions/checkout@v5", "via": null, "note": ""}
 ]}
 ```
+
+Remote scans use `file` values like `owner/repo:.github/workflows/ci.yml`. Nested findings set `via` to the composite or reusable workflow ref that pulled them in.

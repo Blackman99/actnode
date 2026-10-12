@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field, asdict
@@ -15,6 +16,8 @@ USES_RE = re.compile(r"""^(?P<pre>\s*(?:-\s+)?uses:\s*)(?P<q>['"]?)(?P<ref>[^'"\
 USING_RE = re.compile(r"""^\s+using:\s*['"]?([A-Za-z0-9_-]+)""", re.M)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 VER_RE = re.compile(r"^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?$")
+WORKFLOW_SUB_RE = re.compile(r"^\.github/workflows/[^/]+\.(yml|yaml)$")
+DEFAULT_CACHE_TTL = 24 * 3600  # 24 hours
 
 Fetcher = Callable[[str], Optional[str]]
 
@@ -41,6 +44,14 @@ def http_get(url: str) -> Optional[str]:
                 f"GitHub rate limit hit on {url}. Set GITHUB_TOKEN (or GH_TOKEN) and retry."
             ) from e
         raise
+
+
+def cache_dir() -> Path:
+    """`$XDG_CACHE_HOME/actnode` if set, else `~/.cache/actnode`."""
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        return Path(xdg) / "actnode"
+    return Path.home() / ".cache" / "actnode"
 
 
 def node_major(using: Optional[str]) -> Optional[int]:
@@ -74,6 +85,11 @@ def split_ref(ref: str):
     return parts[0], parts[1], "/".join(parts[2:]), at
 
 
+def is_reusable_workflow_path(subpath: str) -> bool:
+    """True if subpath looks like `.github/workflows/name.yml` (a reusable workflow)."""
+    return bool(subpath and WORKFLOW_SUB_RE.match(subpath))
+
+
 def _ver(tag: str):
     m = VER_RE.match(tag)
     if not m:
@@ -87,9 +103,9 @@ class Finding:
     line: int
     uses: str
     runtime: Optional[str]
-    status: str  # ok | old | unknown | no-fix | local | docker | composite
+    status: str  # ok | old | unknown | no-fix | local | docker | composite | workflow
     suggest: Optional[str] = None
-    via: Optional[str] = None  # composite action that pulled this in
+    via: Optional[str] = None  # composite/reusable workflow that pulled this in
     note: str = ""
 
     def to_dict(self):
@@ -99,8 +115,15 @@ class Finding:
 @dataclass
 class Resolver:
     fetch: Fetcher = http_get
+    use_cache: bool = True
+    cache_path: Optional[Path] = None  # override for tests; default cache_dir()
+    cache_ttl: int = DEFAULT_CACHE_TTL
     _yml: dict = field(default_factory=dict)
     _tags: dict = field(default_factory=dict)
+    _wf: dict = field(default_factory=dict)
+
+    def _cache_root(self) -> Path:
+        return self.cache_path if self.cache_path is not None else cache_dir()
 
     def action_yml(self, owner, repo, sub, ref) -> Optional[str]:
         key = (owner, repo, sub, ref)
@@ -114,22 +137,76 @@ class Resolver:
             self._yml[key] = txt
         return self._yml[key]
 
+    def workflow_yml(self, owner, repo, sub, ref) -> Optional[str]:
+        """Fetch a reusable workflow YAML from raw.githubusercontent.com."""
+        key = (owner, repo, sub, ref)
+        if key not in self._wf:
+            url = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{sub}"
+            self._wf[key] = self.fetch(url)
+        return self._wf[key]
+
     def tags(self, owner, repo):
-        """Return list of (name, sha) for version-like tags, newest first."""
+        """Return list of (name, sha) for version-like tags, newest first.
+
+        Uses an in-memory cache for the run, and optionally a disk cache under
+        ~/.cache/actnode (or $XDG_CACHE_HOME/actnode) with a 24h TTL.
+        """
         key = (owner, repo)
         if key not in self._tags:
-            out = []
-            for page in (1, 2, 3):
-                body = self.fetch(f"https://api.github.com/repos/{owner}/{repo}/tags?per_page=100&page={page}")
-                if not body:
-                    break
-                data = json.loads(body)
-                out += [(t["name"], t["commit"]["sha"]) for t in data if _ver(t["name"])]
-                if len(data) < 100:
-                    break
-            out.sort(key=lambda t: (_ver(t[0]), len(t[0])), reverse=True)
-            self._tags[key] = out
+            cached = self._load_tag_cache(owner, repo) if self.use_cache else None
+            if cached is not None:
+                self._tags[key] = cached
+            else:
+                out = []
+                for page in (1, 2, 3):
+                    body = self.fetch(
+                        f"https://api.github.com/repos/{owner}/{repo}/tags?per_page=100&page={page}"
+                    )
+                    if not body:
+                        break
+                    data = json.loads(body)
+                    out += [(t["name"], t["commit"]["sha"]) for t in data if _ver(t["name"])]
+                    if len(data) < 100:
+                        break
+                out.sort(key=lambda t: (_ver(t[0]), len(t[0])), reverse=True)
+                self._tags[key] = out
+                if self.use_cache:
+                    self._save_tag_cache(owner, repo, out)
         return self._tags[key]
+
+    def _tag_cache_file(self, owner, repo) -> Path:
+        safe = f"{owner}__{repo}.json".replace("/", "_")
+        return self._cache_root() / "tags" / safe
+
+    def _load_tag_cache(self, owner, repo):
+        path = self._tag_cache_file(owner, repo)
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if time.time() - float(data.get("fetched_at", 0)) > self.cache_ttl:
+                return None
+            tags = data.get("tags")
+            if not isinstance(tags, list):
+                return None
+            out = []
+            for item in tags:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    out.append((item[0], item[1]))
+                elif isinstance(item, dict) and "name" in item and "sha" in item:
+                    out.append((item["name"], item["sha"]))
+                else:
+                    return None
+            return out
+        except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError):
+            return None
+
+    def _save_tag_cache(self, owner, repo, tags):
+        path = self._tag_cache_file(owner, repo)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {"fetched_at": time.time(), "tags": [[n, s] for n, s in tags]}
+            path.write_text(json.dumps(payload), encoding="utf-8")
+        except OSError:
+            pass
 
     def suggest(self, owner, repo, sub, ref, target=CURRENT) -> Optional[str]:
         """Smallest-surprise replacement ref whose action runs on node>=target, in the same ref style."""
@@ -168,7 +245,6 @@ class Resolver:
             short = [n for n, _ in in_major if _ver(n)[1] == -1]
             return f"{spec}@{short[0] if short else newest_name}"
         return f"{spec}@{newest_name}"
-        return None
 
 
 def workflow_files(root: Path):
@@ -182,6 +258,67 @@ def workflow_files(root: Path):
     return files
 
 
+def list_remote_workflows(owner: str, repo: str, fetch: Fetcher = http_get):
+    """List workflow file paths via the GitHub Contents API. Returns [(path, download_url|None)]."""
+    body = fetch(f"https://api.github.com/repos/{owner}/{repo}/contents/.github/workflows")
+    if not body:
+        return []
+    data = json.loads(body)
+    if not isinstance(data, list):
+        return []
+    out = []
+    for item in data:
+        name = item.get("name") or ""
+        if not name.endswith((".yml", ".yaml")):
+            continue
+        path = item.get("path") or f".github/workflows/{name}"
+        out.append((path, item.get("download_url"), item.get("sha")))
+    return out
+
+
+def fetch_remote_file(owner: str, repo: str, path: str, ref: str, fetch: Fetcher,
+                      download_url: Optional[str] = None) -> Optional[str]:
+    if download_url:
+        txt = fetch(download_url)
+        if txt is not None:
+            return txt
+    return fetch(f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}")
+
+
+def list_org_repos(owner: str, fetch: Fetcher = http_get, include_forks: bool = False):
+    """List public non-fork repos for an org (falls back to user repos). Yields 'owner/name'."""
+    # Try org endpoint first; on 404 fall back to user repos.
+    for kind in ("orgs", "users"):
+        page = 1
+        found_any = False
+        while page <= 10:
+            body = fetch(
+                f"https://api.github.com/{kind}/{owner}/repos?per_page=100&page={page}"
+                f"&type=public&sort=full_name"
+            )
+            if body is None:
+                break
+            data = json.loads(body)
+            if not isinstance(data, list):
+                break
+            if not data and page == 1 and kind == "orgs":
+                break  # try users
+            found_any = True
+            for repo in data:
+                if repo.get("archived"):
+                    continue
+                if not include_forks and repo.get("fork"):
+                    continue
+                full = repo.get("full_name")
+                if full:
+                    yield full
+            if len(data) < 100:
+                return
+            page += 1
+        if found_any:
+            return
+
+
 def scan(root: Path, resolver: Optional[Resolver] = None, target: int = CURRENT, depth: int = 3):
     resolver = resolver or Resolver()
     findings: list[Finding] = []
@@ -192,10 +329,76 @@ def scan(root: Path, resolver: Optional[Resolver] = None, target: int = CURRENT,
     return findings
 
 
+def scan_repo(owner: str, repo: str, resolver: Optional[Resolver] = None,
+              target: int = CURRENT, depth: int = 3, ref: str = "HEAD"):
+    """Scan a remote repo's workflows via the GitHub API (no clone)."""
+    resolver = resolver or Resolver()
+    findings: list[Finding] = []
+    file_label = f"{owner}/{repo}"
+    for path, download_url, _sha in list_remote_workflows(owner, repo, resolver.fetch):
+        text = fetch_remote_file(owner, repo, path, ref, resolver.fetch, download_url)
+        if text is None:
+            findings.append(Finding(
+                f"{file_label}:{path}", 0, path, None, "unknown",
+                note="could not fetch workflow file",
+            ))
+            continue
+        rel = f"{file_label}:{path}"
+        for line, uref, _c in find_uses(text):
+            findings += _check(None, rel, line, uref, resolver, target, depth, via=None)
+    return findings
+
+
+def scan_org(owner: str, resolver: Optional[Resolver] = None, target: int = CURRENT,
+             depth: int = 3, include_forks: bool = False):
+    """Scan all public non-fork repos for an org/user. Aggregates findings with owner/repo:path."""
+    resolver = resolver or Resolver()
+    findings: list[Finding] = []
+    for full in list_org_repos(owner, resolver.fetch, include_forks=include_forks):
+        o, _, name = full.partition("/")
+        findings += scan_repo(o, name, resolver, target, depth)
+    return findings
+
+
+def _local_workflow_text(root: Optional[Path], ref: str) -> Optional[str]:
+    """If ref is a local reusable workflow path, return its text."""
+    if root is None or not ref.startswith("./"):
+        return None
+    p = (root / ref[2:]).resolve()
+    try:
+        # stay inside root
+        p.relative_to(root.resolve())
+    except ValueError:
+        return None
+    if p.is_file() and p.suffix in (".yml", ".yaml"):
+        # Prefer .github/workflows/, but also accept any local .yml that is used as a workflow
+        return p.read_text(encoding="utf-8")
+    return None
+
+
 def _check(root, rel, line, ref, r: Resolver, target, depth, via):
     if ref.startswith("docker://"):
         return [Finding(rel, line, ref, "docker", "docker", via=via)]
+
+    # Local reusable workflow: ./.github/workflows/x.yml
+    if ref.startswith("./") and (
+        is_reusable_workflow_path(ref[2:])
+        or (ref.endswith((".yml", ".yaml")) and "/.github/workflows/" in ("/" + ref[2:]))
+        or (root is not None and _looks_like_local_workflow(root, ref))
+    ):
+        text = _local_workflow_text(root, ref)
+        if text is None:
+            return [Finding(rel, line, ref, None, "unknown", via=via, note="local workflow not found")]
+        out = [Finding(rel, line, ref, "workflow", "workflow", via=via)]
+        if depth > 0:
+            for _l, sub_ref, _c in find_uses(text):
+                for f in _check(root, rel, line, sub_ref, r, target, depth - 1, via=ref):
+                    out.append(f)
+        return out
+
     if ref.startswith("./"):
+        if root is None:
+            return [Finding(rel, line, ref, None, "unknown", via=via, note="local ref in remote scan")]
         p = root / ref[2:]
         y = None
         for name in ("action.yml", "action.yaml"):
@@ -203,15 +406,54 @@ def _check(root, rel, line, ref, r: Resolver, target, depth, via):
                 y = (p / name).read_text(encoding="utf-8")
                 break
         if y is None:
+            # Maybe it's a workflow file used without the standard path layout
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                text = p.read_text(encoding="utf-8")
+                out = [Finding(rel, line, ref, "workflow", "workflow", via=via)]
+                if depth > 0:
+                    for _l, sub_ref, _c in find_uses(text):
+                        for f in _check(root, rel, line, sub_ref, r, target, depth - 1, via=ref):
+                            out.append(f)
+                return out
             return [Finding(rel, line, ref, None, "unknown", via=via, note="local action.yml not found")]
         return _classify(root, rel, line, ref, y, None, r, target, depth, via)
+
     parts = split_ref(ref)
     if not parts:
         return [Finding(rel, line, ref, None, "unknown", via=via, note="unpinned or unparseable ref")]
-    y = r.action_yml(*parts)
+    owner, repo, sub, at = parts
+
+    # Remote reusable workflow
+    if is_reusable_workflow_path(sub):
+        text = r.workflow_yml(owner, repo, sub, at)
+        if text is None:
+            return [Finding(rel, line, ref, None, "unknown", via=via, note="reusable workflow not found")]
+        out = [Finding(rel, line, ref, "workflow", "workflow", via=via)]
+        if depth > 0:
+            for _l, sub_ref, _c in find_uses(text):
+                # Resolve local ./ refs against the reusable workflow's repo (same as composites)
+                if sub_ref.startswith("./"):
+                    local_path = sub_ref[2:].rstrip("/")
+                    if is_reusable_workflow_path(local_path) or local_path.endswith((".yml", ".yaml")):
+                        sub_ref = f"{owner}/{repo}/{local_path}@{at}"
+                    else:
+                        sub_ref = f"{owner}/{repo}/{local_path}@{at}"
+                for f in _check(root, rel, line, sub_ref, r, target, depth - 1, via=ref):
+                    out.append(f)
+        return out
+
+    y = r.action_yml(owner, repo, sub, at)
     if y is None:
+        # Fallback: maybe someone pointed at a workflow-like path we didn't catch, or a missing action
         return [Finding(rel, line, ref, None, "unknown", via=via, note="action.yml not found at that ref")]
     return _classify(root, rel, line, ref, y, parts, r, target, depth, via)
+
+
+def _looks_like_local_workflow(root: Path, ref: str) -> bool:
+    if not ref.startswith("./"):
+        return False
+    p = root / ref[2:]
+    return p.is_file() and p.suffix in (".yml", ".yaml") and "action.yml" not in p.name and "action.yaml" not in p.name
 
 
 def _classify(root, rel, line, ref, y, parts, r, target, depth, via):
@@ -242,14 +484,23 @@ def _classify(root, rel, line, ref, y, parts, r, target, depth, via):
 
 
 def apply_fixes(root: Path, findings) -> int:
-    """Rewrite direct `uses:` lines that have a suggestion. Returns number of lines changed."""
+    """Rewrite direct `uses:` lines that have a suggestion. Returns number of lines changed.
+
+    Only rewrites findings with via=None (not nested inside composites or reusable workflows).
+    Skips remote file labels (owner/repo:path).
+    """
     by_file: dict = {}
     for f in findings:
         if f.status == "old" and f.suggest and f.via is None:
+            if ":" in f.file and not Path(f.file).exists():
+                # remote scan label like owner/repo:.github/workflows/ci.yml
+                continue
             by_file.setdefault(f.file, {})[f.line] = f
     changed = 0
     for rel, lines in by_file.items():
         p = root / rel
+        if not p.is_file():
+            continue
         src = p.read_text(encoding="utf-8").splitlines(keepends=True)
         for ln, f in lines.items():
             raw = src[ln - 1]
