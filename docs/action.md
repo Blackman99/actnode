@@ -25,7 +25,7 @@ The step writes a Markdown table to the job summary and fails if any step uses a
 | `target` | `24` | minimum Node major |
 | `fail` | `true` | fail the step when something old is found |
 | `latest` | `false` | suggest the newest release already on the target Node instead of the smallest major jump |
-| `create-pr` | `false` | apply `--fix` and open a PR when there is a diff |
+| `create-pr` | `false` | apply `--fix` and open (or update, on later runs) a PR when there is a diff; pair with `fail: false`, otherwise the job still fails after opening the PR |
 | `pr-branch` | `actnode/node-runtime` | branch name for `create-pr` |
 | `pr-title` | `chore: bump actions to Node 24 runtime` | PR title for `create-pr` |
 | `token` | `github.token` | used to list tags; also to push/open a PR when `create-pr` is true |
