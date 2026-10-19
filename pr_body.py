@@ -1,4 +1,7 @@
-"""Build a markdown PR body from an actnode JSON report. Usage: pr_body.py REPORT.json TARGET > body.md"""
+"""Build a markdown PR body from an actnode JSON report. Usage: pr_body.py REPORT.json TARGET > body.md
+
+Action-only helper: action.yml runs it via ${{ github.action_path }}; it is not part of the wheel.
+"""
 from __future__ import annotations
 
 import json

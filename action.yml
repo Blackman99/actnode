@@ -18,7 +18,7 @@ inputs:
     description: "Suggest the newest release already on the target Node instead of the smallest major jump (true/false)"
     default: "false"
   create-pr:
-    description: "Apply --fix and open a pull request when there is a diff (true/false). Caller needs contents:write and pull-requests:write."
+    description: "Apply --fix and open (or update) a pull request when there is a diff (true/false). Caller needs contents:write and pull-requests:write. Set fail: false too, or the job still fails after opening the PR."
     default: "false"
   pr-branch:
     description: "Branch name for create-pr"
@@ -104,7 +104,7 @@ runs:
             echo "pr-url=" >> "$GITHUB_OUTPUT"
           else
             git commit -m "chore: bump GitHub Actions to Node ${IN_TARGET} runtime"
-            git push -u origin "HEAD:refs/heads/${branch}" --force-with-lease
+            bash "${{ github.action_path }}/scripts/push_pr_branch.sh" "$branch"
             body_file="$RUNNER_TEMP/actnode-pr-body.md"
             python3 "${{ github.action_path }}/pr_body.py" \
               "$RUNNER_TEMP/actnode.json" "$IN_TARGET" > "$body_file"
